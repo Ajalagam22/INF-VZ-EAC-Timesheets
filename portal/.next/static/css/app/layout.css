@@ -1,0 +1,328 @@
+/*!*************************************************************************************************************************************************************************************************************************************************************!*\
+  !*** css ./node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[2]!./node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[3]!./app/globals.css ***!
+  \*************************************************************************************************************************************************************************************************************************************************************/
+:root {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --border: #d9dde3;
+  --text: #15171a;
+  --muted: #667085;
+  --primary: #d71920;
+  --primary-dark: #111111;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.shell { display: flex; flex-direction: column; min-height: 100vh; }
+
+/* ── Hero ── */
+.hero-banner {
+  position: relative;
+  background: #111;
+  overflow: hidden;
+  padding: 48px 60px 64px;
+  min-height: 280px;
+  display: flex;
+  align-items: center;
+}
+
+.hero-beam {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 55% 120% at 92% 50%, rgba(215,25,32,0.85) 0%, rgba(180,10,20,0.5) 25%, rgba(100,0,5,0.2) 55%, transparent 75%),
+    radial-gradient(ellipse 30% 80% at 100% 60%, rgba(255,80,80,0.35) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.hero-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  width: 100%;
+}
+
+.hero-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.vz-logo { display: flex; align-items: center; gap: 2px; }
+
+.vz-text {
+  font-size: 20px;
+  font-weight: 700;
+  color: white;
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+
+.hero-divider {
+  width: 1px;
+  height: 22px;
+  background: rgba(255,255,255,0.2);
+  flex-shrink: 0;
+}
+
+.hero-product {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+}
+
+.header-badge {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.3);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.hero-tagline h1 {
+  font-size: 44px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.15;
+  letter-spacing: -1px;
+}
+
+.hero-accent { color: var(--primary); }
+
+.hero-tagline p {
+  margin-top: 14px;
+  font-size: 15px;
+  color: rgba(255,255,255,0.45);
+  line-height: 1.7;
+}
+
+/* ── Stats row ── */
+.stats-row {
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: stretch;
+}
+
+.stats-row-item {
+  flex: 1 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 24px 20px;
+  position: relative;
+  text-align: center;
+}
+
+.stats-row-item strong {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.stats-row-item span {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.stats-divider {
+  position: absolute;
+  right: 0;
+  top: 20%;
+  height: 60%;
+  width: 1px;
+  background: var(--border);
+}
+
+/* ── Section ── */
+.section { padding: 48px 40px 0; }
+.main-section { padding-bottom: 64px; }
+
+/* ── Tiles ── */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(300px, 460px));
+  grid-gap: 24px;
+  gap: 24px;
+  justify-content: center;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.07);
+  transition: box-shadow 0.18s, transform 0.18s;
+  text-decoration: none;
+  color: inherit;
+}
+
+.tile:hover {
+  box-shadow: 0 12px 36px rgba(0,0,0,0.12);
+  transform: translateY(-4px);
+}
+
+.tile-header {
+  padding: 28px 28px 20px;
+  border-bottom: 1px solid var(--border);
+  border-radius: 14px 14px 0 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  background: linear-gradient(135deg, #fafbfc 0%, #ffffff 100%);
+}
+
+.tile-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  font-size: 20px;
+}
+
+.tile-icon.system     { background: #e8f0fe; }
+.tile-icon.timesheets { background: #fff0f0; }
+
+.tile-header-text { flex: 1 1; min-width: 0; }
+
+.tile-header-text h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.tile-header-text span {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+  display: block;
+  margin-top: 3px;
+}
+
+.tile-body {
+  padding: 24px 28px;
+  flex: 1 1;
+  display: grid;
+  grid-gap: 16px;
+  gap: 16px;
+}
+
+.tile-body p {
+  font-size: 13.5px;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.tile-features { display: grid; grid-gap: 8px; gap: 8px; list-style: none; }
+
+.tile-features li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12.5px;
+  color: #344054;
+}
+
+.tile-features li::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--primary);
+  flex-shrink: 0;
+}
+
+.tile-footer { padding: 16px 28px 26px; }
+
+.tile-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 18px;
+  border-radius: 8px;
+  border: none;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.tile-btn:hover { opacity: 0.88; }
+.tile-btn.system     { background: #1a56db; color: white; }
+.tile-btn.timesheets { background: var(--primary); color: white; }
+
+.arrow { font-size: 15px; line-height: 1; }
+
+/* ── Closing band ── */
+.closing-band {
+  position: relative;
+  background: #111;
+  overflow: hidden;
+  padding: 48px 60px;
+  display: flex;
+  align-items: center;
+  margin-top: auto;
+}
+
+.closing-beam {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 40% 150% at 100% 50%, rgba(215,25,32,0.5) 0%, rgba(100,0,5,0.15) 50%, transparent 70%);
+  pointer-events: none;
+}
+
+.closing-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+}
+
+.closing-text {
+  font-size: 13px;
+  color: rgba(255,255,255,0.4);
+  flex: 1 1;
+  text-align: center;
+}
+
+.closing-copy {
+  font-size: 11px;
+  color: rgba(255,255,255,0.25);
+  white-space: nowrap;
+}
+
+/* ── Responsive ── */
+@media (max-width: 760px) {
+  .tiles { grid-template-columns: 1fr; }
+  .section { padding: 32px 20px 0; }
+  .main-section { padding-bottom: 40px; }
+  .hero-banner, .closing-band { padding: 40px 24px; }
+  .hero-tagline h1 { font-size: 30px; }
+  .stats-row { flex-wrap: wrap; }
+  .stats-row-item { min-width: 50%; }
+  .closing-inner { flex-direction: column; gap: 10px; text-align: center; }
+}
+
