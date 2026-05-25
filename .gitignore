@@ -1,0 +1,70 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+
+# ── Virtual environment ───────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Environment / secrets ─────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env.local
+# keep the example safe to commit
+!.env.example
+
+# ── Database files ────────────────────────────────────────────────────────────
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# ── Temporary upload staging ──────────────────────────────────────────────────
+backend/tmp/
+backend/backend/
+
+# ── Node / Next.js ────────────────────────────────────────────────────────────
+node_modules/
+frontend/.next/
+frontend/out/
+frontend/.vercel/
+*.tsbuildinfo
+next-env.d.ts
+
+# ── Generated diagram images and PDFs ─────────────────────────────────────────
+docs/*.png
+docs/*.pdf
+docs/EAC_Architecture_Diagram.*
+docs/EAC_Azure_Architecture.*
+docs/EAC_Architecture_Document.pdf
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Logs / coverage ───────────────────────────────────────────────────────────
+*.log
+.coverage
+htmlcov/
+.pytest_cache/

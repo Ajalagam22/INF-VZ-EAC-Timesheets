@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+pandas
+python-docx
+sqlalchemy
+psycopg2-binary
+pydantic
+openpyxl
+python-multipart
+redis
+celery
+litellm
+langgraph
