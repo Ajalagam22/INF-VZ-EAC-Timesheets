@@ -4552,6 +4552,37 @@ pre {
   .employee-review-line {
     grid-template-columns: 1fr 120px minmax(0, 1fr) minmax(0, 1fr) auto;
   }
+
+  .analytics-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1280px) {
+  .left-rail {
+    width: 190px;
+  }
+
+  .workspace {
+    margin-left: 190px;
+  }
+
+  .nav-item span {
+    font-size: 12px;
+  }
+
+  .employee-review-workspace {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .employee-review-line {
+    grid-template-columns: minmax(0, 1.2fr) 110px minmax(0, 0.8fr) minmax(0, 0.8fr) auto;
+    gap: 8px;
+  }
+
+  .review-week-attendance {
+    grid-template-columns: repeat(3, 72px);
+  }
 }
 
 @media (max-width: 1100px) {
