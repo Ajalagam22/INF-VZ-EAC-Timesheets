@@ -39,7 +39,8 @@ The POC demonstrates:
 - audit trace,
 - connector catalog,
 - feedback learning view,
-- analytics and overview reporting.
+- analytics and overview reporting,
+- reconciliation and reporting: cost-centre roll-up, CapEx/OpEx delta vs 100% OpEx baseline, hierarchical drill-down (cost centre → job title → employee → project).
 
 ### 1.4 Key Constraints
 
@@ -92,6 +93,7 @@ The POC demonstrates:
      |        +--> Policy
      |        +--> Classification
      |        +--> Routing
+     |        +--> Reconciliation & Reporting
      |        |
      |        v
      |   [Persistence + Audit Events]
@@ -133,9 +135,67 @@ The same logical boundaries map cleanly to production infrastructure:
 
 ---
 
-## 3. Component Architecture
+## 3. Agentic Workflow Diagram
 
-### 3.1 Frontend
+> **Standalone deliverable (REQ-53).** This diagram is self-explanatory and does not require supporting text. It covers all seven pipeline stages and all three output channels as required by the May 22 stakeholder addendum.
+
+```mermaid
+flowchart LR
+    subgraph Sources["① DATA SOURCES"]
+        direction TB
+        S1["📊 Excel Dataset Connector\n── ACTIVE ──\nStructured activity records\nper employee per week"]
+        S2["📄 DOCX Form Parser\n── ACTIVE ──\nRaw timesheet documents\n& semi-structured forms"]
+        S3["⏳ Coming Soon\nBigQuery · HR Systems\nProject Registries\nCalendar · Jira · Git"]
+    end
+
+    subgraph Pipeline["EAC AGENTIC PIPELINE  ·  7 Specialist Agents"]
+        direction TB
+        A1["② DATA HARVESTING AGENT\n────────────────────────\nIngestion · Schema validation · Staging\nExcel Connector + DOCX Parser active\nMalformed records → quarantine"]
+        A2["③ CONTEXT BUILDING AGENT\n────────────────────────\nPer-employee 7-day activity digest\nRolling weekly window construction\nEmployee profile · Project registry · Activity context"]
+        A3["④ CLASSIFICATION AGENT\n────────────────────────\nCapEx / OpEx / Review decision\nConfidence score  0 – 100\nEvidence trail · Signal ledger"]
+        A4["⑤ POLICY & RULES AGENT\n────────────────────────\nAccounting rule overlay\nProject code constraint enforcement\nPersona configuration"]
+        A5["⑥ CONFIDENCE & ROUTING AGENT\n────────────────────────\nHigh-confidence → Employee Review Queue\nLow-confidence  → Team Lead Escalation Queue\nThreshold: configurable per persona"]
+        A6["⑦ RECONCILIATION & REPORTING AGENT\n────────────────────────\nPost-classification aggregation\nRoll up to cost centre · Count completions\nCompute CapEx / OpEx deltas vs 100% OpEx baseline\nProduce finance-facing reconciliation report"]
+    end
+
+    subgraph Outputs["OUTPUT CHANNELS"]
+        direction TB
+        O1["(a) EMPLOYEE TIMESHEET DRAFT\nPre-populated weekly draft\nHigh-confidence classified records\nAudience: Individual employees"]
+        O2["(b) TEAM LEAD ESCALATION VIEW\nLow-confidence & ambiguous records\nRequires team lead resolution\nAudience: Team leads / managers"]
+        O3["(c) FINANCE / TAX RECONCILIATION REPORT\nCost-centre roll-up · Completion counts\nCapEx / OpEx delta vs baseline\nAudience: Finance · Tax · Accounting"]
+    end
+
+    S1 --> A1
+    S2 --> A1
+    S3 -.->|"future\nconnectors"| A1
+
+    A1 --> A2
+    A2 --> A3
+    A3 --> A4
+    A4 --> A5
+    A5 -->|"approved\nhigh confidence"| O1
+    A5 -->|"review\nlow confidence"| O2
+    A5 --> A6
+    A6 --> O3
+```
+
+### Agent Responsibilities
+
+| Stage | Agent | What it does | Output |
+| --- | --- | --- | --- |
+| ① | Data Sources | Two active connectors: Excel dataset (structured records) and DOCX Form Parser (raw timesheet documents). Coming Soon: BigQuery, HR systems, project registries. | Normalised canonical activity records |
+| ② | Data Harvesting Agent | Ingests records from active connectors, enforces schema contract, validates required fields, stages clean records. Malformed records are quarantined before they enter the pipeline. | Validated record payload or quarantine event |
+| ③ | Context Building Agent | Constructs a per-employee 7-day activity digest using a rolling weekly window. Assembles employee profile, project registry metadata, and activity-type context for downstream agents. | Enriched context bundle |
+| ④ | Classification Agent | Produces the primary CapEx / OpEx / Review decision with a 0–100 confidence score, a human-readable evidence trail, and a structured signal list. | `_classification`, `_confidence`, `_evidence`, `_signals` |
+| ⑤ | Policy & Rules Agent | Applies accounting rule overlay: fixed-asset rules, project code constraint enforcement, persona configuration. Adds rule version and matched-rule evidence to the record. | Rule-adjusted record, rule version, policy evidence |
+| ⑥ | Confidence & Routing Agent | Bifurcates the record stream: high-confidence approved records go to the Employee Review Queue; low-confidence records route to the Team Lead Escalation Queue. Threshold is configurable per persona. | `_routingState`: `approved` or `review` |
+| ⑦ | Reconciliation & Reporting Agent | Post-classification aggregation: rolls up to cost centre, counts completions and outstanding submissions, computes CapEx / OpEx deltas vs 100% OpEx baseline, produces the Finance / Tax Reconciliation Report. | Cost-centre reconciliation report |
+
+---
+
+## 4. Component Architecture
+
+### 4.1 Frontend
 
 The frontend is a Next.js app implemented primarily in `frontend/app/page.tsx` and styled through `frontend/app/globals.css`.
 
@@ -148,7 +208,8 @@ The frontend is a Next.js app implemented primarily in `frontend/app/page.tsx` a
 | Review Queue | Team-lead low-confidence record resolution |
 | Employee Review | Employee review-and-confirm packet with editable weekly data |
 | Employee Directory | Employee-level timesheet history and contribution analysis |
-| Analytics | KPI cards, CapEx spend by project, weekly CapEx vs OpEx stacked bars |
+| Analytics | KPI cards, CapEx spend by project, weekly CapEx vs OpEx stacked bars, Early Insights panel (REQ-58/59) |
+| Reconciliation | 4-level hierarchical roll-up: cost centre → job title → employee → project; finance-facing report with CapEx/OpEx deltas, completion counts, and production integration note (REQ-54–56) |
 | Audit Trail | Event timeline, classification trace, and agent pipeline evidence |
 | Data Sources | Connectors, pipeline contract, and form validation |
 | Feedback Learning | Correction log, calibration candidates, and governed learning loop |
@@ -166,7 +227,7 @@ The frontend loads:
 
 Most interactions use REST calls against the FastAPI backend. UI state is kept local to the app for selected tab, filters, selected employee, selected record, search terms, and expanded rows.
 
-### 3.2 Backend API
+### 4.2 Backend API
 
 The backend exposes a REST API through FastAPI.
 
@@ -185,6 +246,7 @@ The backend exposes a REST API through FastAPI.
 | `GET /api/audit/{record_uid}` | Audit events for a record |
 | `POST /api/records/{record_uid}/override` | Team-lead classification override |
 | `PATCH /api/records/{record_uid}` | Employee review edits |
+| `GET /api/reconciliation` | Cost-centre reconciliation report with 4-level hierarchical roll-up (REQ-54–56) |
 
 #### Upload Routes
 
@@ -194,7 +256,7 @@ The backend exposes a REST API through FastAPI.
 | `POST /api/upload/forms` | Stage one DOCX file or DOCX ZIP ingestion |
 | `GET /api/upload/jobs/{job_id}` | Poll ingestion progress and outcome |
 
-### 3.3 Connector Framework
+### 4.3 Connector Framework
 
 Connectors own source-specific extraction. They do not classify records.
 
@@ -233,7 +295,7 @@ Responsibilities:
 - Deduplicate records by stable key.
 - Compute extraction confidence.
 
-### 3.4 Orchestration
+### 4.4 Orchestration
 
 The `FlowOrchestrator` coordinates the full run:
 
@@ -250,12 +312,12 @@ The `FlowOrchestrator` coordinates the full run:
 
 The orchestrator supports both Excel and DOCX/ZIP using the same downstream classification path.
 
-### 3.5 Agent Pipeline
+### 4.5 Agent Pipeline
 
-The app uses a LangGraph state graph with six nodes:
+The app uses a LangGraph state graph with seven nodes (REQ-54):
 
 ```text
-Harvesting -> Context -> Retrieval -> Policy -> Classification -> Routing -> END
+Harvesting -> Context -> Retrieval -> Policy -> Classification -> Routing -> Reconciliation -> END
 ```
 
 | Agent Node | Responsibility |
@@ -266,10 +328,11 @@ Harvesting -> Context -> Retrieval -> Policy -> Classification -> Routing -> END
 | Policy | Apply fixed asset and project-coder rule context |
 | Classification | Produce CapEx / OpEx / Review, confidence, and evidence |
 | Routing | Determine employee review versus team-lead review state |
+| Reconciliation & Reporting | Stamp record with cost-centre metadata; aggregate to cost centre level; compute CapEx/OpEx delta vs 100% OpEx baseline; produce finance-facing report (REQ-54–56) |
 
 The UI audit view displays this as an EAC-style Agent Pipeline Trace.
 
-### 3.6 Classification Engine
+### 4.6 Classification Engine
 
 The classification engine is policy-led and hybrid:
 
@@ -289,7 +352,7 @@ Classification outputs include:
 - routing state,
 - agent trace.
 
-### 3.7 Persistence Model
+### 4.7 Persistence Model
 
 The POC uses SQLAlchemy-backed SQLite. Core stored entities include:
 
@@ -304,9 +367,9 @@ The serialized record payload stores canonical fields and source metadata, while
 
 ---
 
-## 4. Data Architecture
+## 5. Data Architecture
 
-### 4.1 Canonical Record Shape
+### 5.1 Canonical Record Shape
 
 The canonical activity record is the core interface between connectors and the engine.
 
@@ -339,7 +402,7 @@ source metadata
 classification metadata
 ```
 
-### 4.2 Record Identity
+### 5.2 Record Identity
 
 Records use stable keys derived from employee, week, project, and activity context. This supports:
 
@@ -349,7 +412,7 @@ Records use stable keys derived from employee, week, project, and activity conte
 - replay comparison,
 - employee-week grouping.
 
-### 4.3 Employee Weekly Drafts
+### 5.3 Employee Weekly Drafts
 
 The `/api/drafts` response groups high-confidence or resolved records by:
 
@@ -371,14 +434,14 @@ Each draft contains:
 - estimated recovery,
 - line items.
 
-### 4.4 Review Queue Records
+### 5.4 Review Queue Records
 
 Review Queue groups low-confidence records by manager/team-lead context. A record appears in the queue when:
 
 - effective classification is `Review`, or
 - confidence is below threshold and no human override has resolved it.
 
-### 4.5 Audit Events
+### 5.5 Audit Events
 
 Audit events are created for:
 
@@ -392,9 +455,9 @@ The audit payload stores enough context to reconstruct the decision trace and hu
 
 ---
 
-## 5. User Experience Architecture
+## 6. User Experience Architecture
 
-### 5.1 Overview
+### 6.1 Overview
 
 Overview is the executive and finance reviewer entry point. It summarizes:
 
@@ -404,7 +467,7 @@ Overview is the executive and finance reviewer entry point. It summarizes:
 - trends,
 - estimated recovery.
 
-### 5.2 Activity Records
+### 6.2 Activity Records
 
 Activity Records is the canonical data inspector. It provides:
 
@@ -416,7 +479,7 @@ Activity Records is the canonical data inspector. It provides:
 - manual override,
 - evidence and confidence display.
 
-### 5.3 Review Queue
+### 6.3 Review Queue
 
 Review Queue is for team leads, not employees. It exposes:
 
@@ -426,7 +489,7 @@ Review Queue is for team leads, not employees. It exposes:
 - action controls,
 - audit linkage.
 
-### 5.4 Employee Review
+### 6.4 Employee Review
 
 Employee Review is the editable employee packet:
 
@@ -439,7 +502,7 @@ Employee Review is the editable employee packet:
 - save changes,
 - submit draft.
 
-### 5.5 Employee Directory
+### 6.5 Employee Directory
 
 Employee Directory mirrors the Employee Review search/list behavior but is read-optimized:
 
@@ -450,7 +513,7 @@ Employee Directory mirrors the Employee Review search/list behavior but is read-
 - attendance context,
 - audit links.
 
-### 5.6 Data Sources
+### 6.6 Data Sources
 
 Data Sources has three subtabs:
 
@@ -462,13 +525,13 @@ This supports demo flow, connector governance, and extraction QA.
 
 ---
 
-## 6. Security and Governance Architecture
+## 7. Security and Governance Architecture
 
-### 6.1 POC State
+### 7.1 POC State
 
 The current POC is a no-login local application. It is suitable for assessment/demo use but not for production employee financial data without added controls.
 
-### 6.2 Production Roles
+### 7.2 Production Roles
 
 | Role | Access |
 | --- | --- |
@@ -478,7 +541,7 @@ The current POC is a no-login local application. It is suitable for assessment/d
 | Admin | Connector configuration, rule versions, ingestion jobs |
 | Platform Operator | Infrastructure, logs, deployment, secrets |
 
-### 6.3 Production Controls
+### 7.3 Production Controls
 
 Production should add:
 
@@ -494,9 +557,9 @@ Production should add:
 
 ---
 
-## 7. Reliability Architecture
+## 8. Reliability Architecture
 
-### 7.1 Failure Handling
+### 8.1 Failure Handling
 
 | Failure | Current Behavior |
 | --- | --- |
@@ -507,7 +570,7 @@ Production should add:
 | Upload job failure | Job status exposes failed state and error |
 | Low confidence | Review Queue |
 
-### 7.2 Idempotency and Replay
+### 8.2 Idempotency and Replay
 
 The system preserves:
 
@@ -521,7 +584,7 @@ The system preserves:
 
 These fields support replay and comparison across runs.
 
-### 7.3 Progress Visibility
+### 8.3 Progress Visibility
 
 Upload jobs expose:
 
@@ -537,9 +600,9 @@ This prevents silent long-running sync behavior.
 
 ---
 
-## 8. Production Deployment Path
+## 9. Production Deployment Path
 
-### 8.1 Recommended Services
+### 9.1 Recommended Services
 
 | Capability | Recommended Production Service |
 | --- | --- |
@@ -554,7 +617,7 @@ This prevents silent long-running sync behavior.
 | Audit archive | Append-only event store with retention controls |
 | Observability | Application traces, job metrics, audit dashboards |
 
-### 8.2 Separation of API and Worker
+### 9.2 Separation of API and Worker
 
 Production should split runtime into:
 
@@ -563,7 +626,7 @@ Production should split runtime into:
 
 Both can use the same image but different startup commands. This avoids batch runs blocking interactive API latency.
 
-### 8.3 Batch Operating Model
+### 9.3 Batch Operating Model
 
 Production workflow:
 
@@ -577,7 +640,7 @@ Production workflow:
 
 ---
 
-## 9. Observability
+## 10. Observability
 
 The system should expose:
 
@@ -599,7 +662,7 @@ The POC surfaces a subset through connector metrics, summary views, audit events
 
 ---
 
-## 10. Known Gaps and Production Hardening
+## 11. Known Gaps and Production Hardening
 
 | Area | Gap | Production Hardening |
 | --- | --- | --- |
@@ -616,7 +679,7 @@ The POC surfaces a subset through connector metrics, summary views, audit events
 
 ---
 
-## 11. Summary
+## 12. Summary
 
 EAC Labor Timesheets is a source-agnostic employee activity classification platform for weekly project-coded labor. Its architecture separates connectors, canonical schema, classification engine, confidence routing, review UX, and audit trail. The POC is local and pragmatic, but it demonstrates the full target workflow:
 

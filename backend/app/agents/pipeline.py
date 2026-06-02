@@ -82,6 +82,7 @@ class AgenticPipeline:
             "policy_result": {},
             "classified_record": {},
             "routing_decision": "",
+            "reconciliation_result": {},
             "steps": [],
             "errors": [],
             "precomputed_llm": precomputed_llm or {},

@@ -4762,3 +4762,55 @@ pre {
     gap: 2px;
   }
 }
+
+/* ── Early Insights ─────────────────────────────── */
+.insight-slice { margin-bottom: 28px; }
+.insight-slice h5 { font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+.insight-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+.insight-table { display: flex; flex-direction: column; gap: 6px; }
+.insight-row { display: grid; grid-template-columns: 200px 1fr 80px auto; align-items: center; gap: 10px; font-size: 12px; }
+.insight-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+.insight-bar-track { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--border); }
+.insight-bar-track span { display: block; height: 100%; }
+.insight-bar-track .capex { background: var(--capex); }
+.insight-bar-track .opex { background: var(--opex); }
+.insight-bar-track .review { background: var(--review); }
+.insight-pct { text-align: right; white-space: nowrap; color: var(--text-muted); }
+.insight-flag { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; white-space: nowrap; background: var(--review-bg, #fff3cd); color: var(--review-text, #856404); }
+.insight-flag.capex-flag { background: var(--capex-bg, #d1fae5); color: var(--capex-text, #065f46); }
+.insight-flag.review-flag { background: var(--review-bg, #fee2e2); color: var(--review-text, #991b1b); }
+.anomaly-slice { margin-top: 4px; }
+.anomaly-list { display: flex; flex-direction: column; gap: 8px; }
+.anomaly-item { display: flex; flex-direction: column; gap: 3px; padding: 10px 14px; border-radius: 6px; border-left: 3px solid; font-size: 13px; }
+.anomaly-item.high { border-color: var(--review, #ef4444); background: #fef2f2; }
+.anomaly-item.medium { border-color: #f59e0b; background: #fffbeb; }
+.anomaly-item strong { font-size: 12px; font-weight: 600; }
+.capex-text { color: var(--capex, #059669); }
+.insight-drilldown-panel { margin: 12px 0 20px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.insight-drilldown-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--bg-subtle, #f8fafc); border-bottom: 1px solid var(--border); font-size: 13px; }
+.insight-drilldown-head strong { flex: 1; }
+.insight-drilldown-head span { color: var(--text-muted); }
+/* ── Hierarchical Roll-Up Table (Reconciliation) ────────────────────────── */
+.hier-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.hier-table thead th { font-size: 11.5px; }
+.hier-name-cell { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.hier-toggle { color: var(--text-muted); font-size: 10px; user-select: none; flex-shrink: 0; width: 12px; text-align: center; }
+.hier-muted { font-size: 10.5px; color: var(--text-muted); }
+.hier-row-l1 { cursor: pointer; background: var(--bg-card, #fff); font-size: 13px; }
+.hier-row-l1:hover td { background: var(--bg-subtle, #f8fafc); }
+.hier-row-l2 { cursor: pointer; background: var(--bg-subtle, #f8fafc); border-left: 3px solid var(--capex, #059669); }
+.hier-row-l2:hover td { background: #edf7f1; }
+.hier-row-l2 td { font-size: 12.5px; }
+.hier-row-l3 { background: #fff; border-left: 3px solid var(--border); }
+.hier-row-l3:hover td { background: var(--bg-subtle, #f8fafc); }
+.hier-row-l3 td { font-size: 12px; color: var(--text-muted); }
+.hier-row-l3 td strong { color: var(--text); }
+.hier-row-l4 { background: #fafafa; border-left: 3px solid #e5e7eb; }
+.hier-row-l4 td { font-size: 11.5px; color: var(--text-muted); }
+
+.cross-dim-table { display: flex; flex-direction: column; gap: 14px; }
+.cross-dim-group { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 8px; background: var(--bg-subtle, #f8fafc); border: 1px solid var(--border); }
+.cross-dim-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.cross-dim-header .insight-label { font-weight: 600; font-size: 13px; }
+.cross-dim-row { grid-template-columns: 180px 1fr 80px auto; padding-left: 12px; }
+.cross-dim-team { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); font-size: 11.5px; }

@@ -27,7 +27,7 @@ import { appConfig } from "../config/appConfig";
 type Classification = "CapEx" | "OpEx" | "Review";
 type RecordFilter = "All" | Classification;
 type SourceFilter = "All" | "Excel" | "DOCX form";
-type TabId = "dashboard" | "records" | "analytics" | "sources" | "drafts" | "review" | "escalations" | "learning" | "audit";
+type TabId = "dashboard" | "records" | "analytics" | "sources" | "drafts" | "review" | "escalations" | "learning" | "audit" | "reconciliation";
 type SourceSubTab = "connectors" | "pipeline" | "validation";
 
 type Summary = {
@@ -155,6 +155,46 @@ type EscalationGroup = {
   records: RecordItem[];
 };
 
+type ReconciliationEmployee = {
+  employee_id: string;
+  full_name: string;
+  job_title: string;
+  total_hours: number;
+  capex_hours: number;
+  opex_hours: number;
+  review_hours: number;
+  capex_pct: number;
+  delta_hours: number;
+  record_count: number;
+  flagged: boolean;
+};
+
+type ReconciliationCostCenter = {
+  cost_center: string;
+  employee_count: number;
+  completed_records: number;
+  outstanding_records: number;
+  total_hours: number;
+  capex_hours: number;
+  opex_hours: number;
+  review_hours: number;
+  baseline_opex_hours: number;
+  capitalisation_delta_hours: number;
+  capitalisation_pct: number;
+  flagged_employee_count: number;
+  employees: ReconciliationEmployee[];
+};
+
+type ReconciliationReport = {
+  total_employees_processed: number;
+  total_cost_centers: number;
+  total_hours: number;
+  total_capex_hours: number;
+  total_capex_pct: number;
+  total_baseline_delta_hours: number;
+  cost_centers: ReconciliationCostCenter[];
+};
+
 type Connector = {
   source_type: string;
   source_file_name: string;
@@ -231,7 +271,8 @@ const tabs: Array<{ id: TabId; label: string; icon: LucideIcon }> = [
   { id: "analytics", label: "Analytics", icon: TrendingUp },
   { id: "audit", label: "Audit Trail", icon: History },
   { id: "sources", label: "Data Sources", icon: Database },
-  { id: "learning", label: "Feedback Learning", icon: RefreshCw }
+  { id: "learning", label: "Feedback Learning", icon: RefreshCw },
+  { id: "reconciliation", label: "Reconciliation", icon: Layers3 }
 ];
 
 const emptySummary: Summary = {
@@ -469,6 +510,8 @@ export default function Page() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [escalations, setEscalations] = useState<EscalationGroup[]>([]);
   const [connectors, setConnectors] = useState<Connector[]>([]);
+  const emptyReconciliation: ReconciliationReport = { total_employees_processed: 0, total_cost_centers: 0, total_hours: 0, total_capex_hours: 0, total_capex_pct: 0, total_baseline_delta_hours: 0, cost_centers: [] };
+  const [reconciliationReport, setReconciliationReport] = useState<ReconciliationReport>(emptyReconciliation);
   const [records, setRecords] = useState<RecordItem[]>([]);
   const [selectedRecord, setSelectedRecord] = useState<RecordItem | null>(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
@@ -486,18 +529,20 @@ export default function Page() {
   const apiBase = appConfig.apiBaseUrl.replace(/\/$/, "");
 
   async function loadAll() {
-    const [summaryRes, draftsRes, escalationRes, connectorsRes, recordsRes] = await Promise.all([
+    const [summaryRes, draftsRes, escalationRes, connectorsRes, recordsRes, reconciliationRes] = await Promise.all([
       fetch(`${apiBase}/api/summary`),
       fetch(`${apiBase}/api/drafts`),
       fetch(`${apiBase}/api/escalations`),
       fetch(`${apiBase}/api/connectors`),
-      fetch(`${apiBase}/api/records?limit=1000`)
+      fetch(`${apiBase}/api/records?limit=1000`),
+      fetch(`${apiBase}/api/reconciliation`)
     ]);
     if (summaryRes.ok) setSummary(await summaryRes.json());
     if (draftsRes.ok) setDrafts((await draftsRes.json()).drafts ?? []);
     if (escalationRes.ok) setEscalations((await escalationRes.json()).escalations ?? []);
     if (connectorsRes.ok) setConnectors((await connectorsRes.json()).connectors ?? []);
     if (recordsRes.ok) setRecords((await recordsRes.json()).records ?? []);
+    if (reconciliationRes.ok) setReconciliationReport(await reconciliationRes.json());
   }
 
   useEffect(() => {
@@ -871,6 +916,10 @@ export default function Page() {
                 </article>
               ))}
             </section>
+          )}
+
+          {activeTab === "reconciliation" && (
+            <ReconciliationView report={reconciliationReport} records={records} />
           )}
 
           {activeTab === "audit" && (
@@ -1680,6 +1729,8 @@ function AnalyticsView({
   projectGroups: ProjectRecordGroup[];
   feedbackEvents: RecordItem[];
 }) {
+  const [insightDrilldown, setInsightDrilldown] = useState<{ label: string; records: RecordItem[] } | null>(null);
+
   const reportingRecords = records.filter(
     (record) => (record._source ?? "") === "Excel" || ((record._source ?? "") === "DOCX form" && !Number(record._matchedExcel || 0))
   );
@@ -1988,6 +2039,452 @@ function AnalyticsView({
             </Fragment>
           ))}
         </div>
+      </section>
+
+      {/* ── Early Insights ─────────────────────────────────────── */}
+      <section className="panel">
+        <div className="section-title">
+          <h4>Early Insights</h4>
+          <span>patterns and anomalies across the classified dataset — click any row to drill down to underlying records</span>
+        </div>
+
+        {insightDrilldown && (
+          <div className="insight-drilldown-panel">
+            <div className="insight-drilldown-head">
+              <strong>{insightDrilldown.label}</strong>
+              <span>{insightDrilldown.records.length} records</span>
+              <button className="icon-button" onClick={() => setInsightDrilldown(null)} title="Close">✕</button>
+            </div>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Job Title</th>
+                    <th>Team</th>
+                    <th>Week</th>
+                    <th>Project</th>
+                    <th>Activity</th>
+                    <th>Hours</th>
+                    <th>Classification</th>
+                    <th>Confidence</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {insightDrilldown.records.slice(0, 50).map((r) => (
+                    <tr key={r._recordUid}>
+                      <td><strong>{r.full_name}</strong></td>
+                      <td>{r.job_title}</td>
+                      <td>{r.team_name}</td>
+                      <td>{r.week_start_date}</td>
+                      <td>{r.project_code}</td>
+                      <td>{r.activity_type}</td>
+                      <td>{r.hours_allocated}h</td>
+                      <td><span className={`badge ${effectiveClassification(r) === "CapEx" ? "capex" : effectiveClassification(r) === "OpEx" ? "opex" : "review"}`}>{effectiveClassification(r)}</span></td>
+                      <td>{r._confidence}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {insightDrilldown.records.length > 50 && <p className="audit-muted" style={{ padding: "8px 12px" }}>Showing 50 of {insightDrilldown.records.length} records.</p>}
+            </div>
+          </div>
+        )}
+
+        {/* Slice 1: By Job Title */}
+        {(() => {
+          const byTitle = Array.from(
+            reportingRecords.reduce((map, r) => {
+              const title = r.job_title || "Unknown";
+              const item = map.get(title) ?? { title, capex: 0, opex: 0, review: 0, total: 0 };
+              const h = Number(r.hours_allocated || 0);
+              const cls = effectiveClassification(r);
+              item.total += h;
+              if (cls === "CapEx") item.capex += h;
+              else if (cls === "OpEx") item.opex += h;
+              else item.review += h;
+              return map.set(title, item);
+            }, new Map<string, { title: string; capex: number; opex: number; review: number; total: number }>())
+            .values()
+          ).sort((a, b) => b.total - a.total);
+
+          // Per-employee CapEx % per title — to measure internal variance across employees
+          const empHoursByTitle = new Map<string, Map<string, { capex: number; total: number }>>();
+          reportingRecords.forEach((r) => {
+            const title = r.job_title || "Unknown";
+            const id = r.employee_id || r.full_name || "?";
+            if (!empHoursByTitle.has(title)) empHoursByTitle.set(title, new Map());
+            const empMap = empHoursByTitle.get(title)!;
+            if (!empMap.has(id)) empMap.set(id, { capex: 0, total: 0 });
+            const d = empMap.get(id)!;
+            const h = Number(r.hours_allocated || 0);
+            d.total += h;
+            if (effectiveClassification(r) === "CapEx") d.capex += h;
+          });
+          const empCapexByTitle = new Map<string, number[]>();
+          empHoursByTitle.forEach((empMap, title) => {
+            empCapexByTitle.set(title, Array.from(empMap.values()).map((d) => d.total ? (d.capex / d.total) * 100 : 0));
+          });
+
+          return (
+            <div className="insight-slice">
+              <h5>CapEx / OpEx Split by Job Title</h5>
+              <p className="insight-sub">Flagged when employees within the same role disagree by &gt;40 percentage points — indicates inconsistent classification for that function.</p>
+              <div className="insight-table">
+                {byTitle.map((row) => {
+                  const capexPct = row.total ? (row.capex / row.total) * 100 : 0;
+                  const empPcts = empCapexByTitle.get(row.title) || [];
+                  const spread = empPcts.length >= 2
+                    ? Math.max(...empPcts) - Math.min(...empPcts)
+                    : 0;
+                  const isHighVariance = spread > 40;
+                  return (
+                    <div className="insight-row" key={row.title} style={{ cursor: "pointer" }} onClick={() => setInsightDrilldown({ label: `Job Title: ${row.title}`, records: reportingRecords.filter(r => (r.job_title || "Unknown") === row.title) })}>
+                      <span className="insight-label">{row.title}</span>
+                      <div className="insight-bar-track">
+                        <span className="capex" style={{ width: `${capexPct}%` }} />
+                        <span className="opex" style={{ width: `${row.total ? (row.opex / row.total) * 100 : 0}%` }} />
+                        <span className="review" style={{ width: `${row.total ? (row.review / row.total) * 100 : 0}%` }} />
+                      </div>
+                      <span className="insight-pct">{Math.round(capexPct)}% CapEx</span>
+                      {isHighVariance && <span className="insight-flag">{Math.round(spread)}pt spread</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Slice 1b: Job Function × Business Unit cross-slice (quick wins) */}
+        {(() => {
+          // Build a map: jobTitle → Map<team, {capex, total}>
+          const crossMap = new Map<string, Map<string, { capex: number; total: number }>>();
+          reportingRecords.forEach((r) => {
+            const title = r.job_title || "Unknown";
+            const team = r.team_name || r.org_unit || "Unassigned";
+            if (!crossMap.has(title)) crossMap.set(title, new Map());
+            const teamMap = crossMap.get(title)!;
+            if (!teamMap.has(team)) teamMap.set(team, { capex: 0, total: 0 });
+            const d = teamMap.get(team)!;
+            const h = Number(r.hours_allocated || 0);
+            d.total += h;
+            if (effectiveClassification(r) === "CapEx") d.capex += h;
+          });
+
+          // Only show job titles that appear in at least 2 teams
+          const rows = Array.from(crossMap.entries())
+            .map(([title, teamMap]) => {
+              const teams = Array.from(teamMap.entries()).map(([team, d]) => ({
+                team,
+                capexPct: d.total ? (d.capex / d.total) * 100 : 0,
+                hours: d.total,
+              })).sort((a, b) => b.hours - a.hours);
+              const pcts = teams.map((t) => t.capexPct);
+              const spread = pcts.length >= 2 ? Math.max(...pcts) - Math.min(...pcts) : 0;
+              return { title, teams, spread, totalHours: teams.reduce((s, t) => s + t.hours, 0) };
+            })
+            .filter((r) => r.teams.length >= 2)
+            .sort((a, b) => b.spread - a.spread);
+
+          if (!rows.length) return null;
+
+          return (
+            <div className="insight-slice">
+              <h5>Job Function Across Business Units</h5>
+              <p className="insight-sub">
+                Same role, different teams — large spread flags capitalisation inconsistency and quick-win opportunities.
+              </p>
+              <div className="insight-table cross-dim-table">
+                {rows.map((row) => (
+                  <div key={row.title} className="cross-dim-group">
+                    <div className="cross-dim-header">
+                      <span className="insight-label">{row.title}</span>
+                      {row.spread > 25 && (
+                        <span className="insight-flag capex-flag">
+                          {Math.round(row.spread)}pt spread — quick win
+                        </span>
+                      )}
+                    </div>
+                    {row.teams.map((t) => (
+                      <div
+                        className="insight-row cross-dim-row"
+                        key={t.team}
+                        style={{ cursor: "pointer" }}
+                        onClick={() =>
+                          setInsightDrilldown({
+                            label: `${row.title} → ${t.team}`,
+                            records: reportingRecords.filter(
+                              (r) =>
+                                (r.job_title || "Unknown") === row.title &&
+                                (r.team_name || r.org_unit || "Unassigned") === t.team
+                            ),
+                          })
+                        }
+                      >
+                        <span className="cross-dim-team">{t.team}</span>
+                        <div className="insight-bar-track">
+                          <span className="capex" style={{ width: `${t.capexPct}%` }} />
+                          <span className="opex" style={{ width: `${100 - t.capexPct}%` }} />
+                        </div>
+                        <span className="insight-pct">{Math.round(t.capexPct)}% CapEx</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Slice 2: By Team / Org Unit */}
+        {(() => {
+          const byTeam = Array.from(
+            reportingRecords.reduce((map, r) => {
+              const team = r.team_name || r.org_unit || "Unassigned";
+              const item = map.get(team) ?? { team, capex: 0, opex: 0, review: 0, total: 0 };
+              const h = Number(r.hours_allocated || 0);
+              const cls = effectiveClassification(r);
+              item.total += h;
+              if (cls === "CapEx") item.capex += h;
+              else if (cls === "OpEx") item.opex += h;
+              else item.review += h;
+              return map.set(team, item);
+            }, new Map<string, { team: string; capex: number; opex: number; review: number; total: number }>())
+            .values()
+          ).sort((a, b) => b.total - a.total);
+          const capexPcts = byTeam.map(t => t.total ? (t.capex / t.total) * 100 : 0);
+          const maxTeamCapexPct = byTeam.length ? Math.max(...capexPcts) : 100;
+          const minTeamCapexPct = byTeam.length ? Math.min(...capexPcts) : 0;
+          return (
+            <div className="insight-slice">
+              <h5>CapEx Capitalisation Rate by Team</h5>
+              <div className="insight-table">
+                {byTeam.map((row) => {
+                  const capexPct = row.total ? (row.capex / row.total) * 100 : 0;
+                  const opexPct = row.total ? (row.opex / row.total) * 100 : 0;
+                  const reviewPct = row.total ? (row.review / row.total) * 100 : 0;
+                  const isLow = capexPct === minTeamCapexPct && byTeam.length > 1;
+                  const isHigh = capexPct === maxTeamCapexPct && byTeam.length > 1;
+                  return (
+                    <div className="insight-row" key={row.team} style={{ cursor: "pointer" }} onClick={() => setInsightDrilldown({ label: `Team: ${row.team}`, records: reportingRecords.filter(r => (r.team_name || r.org_unit || "Unassigned") === row.team) })}>
+                      <span className="insight-label">{row.team}</span>
+                      <div className="insight-bar-track">
+                        <span className="capex" style={{ width: `${capexPct}%` }} />
+                        <span className="opex" style={{ width: `${opexPct}%` }} />
+                        <span className="review" style={{ width: `${reviewPct}%` }} />
+                      </div>
+                      <span className="insight-pct">{Math.round(capexPct)}% CapEx</span>
+                      {isHigh && <span className="insight-flag capex-flag">Highest</span>}
+                      {isLow && <span className="insight-flag review-flag">Lowest</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Slice 3: By Project — CapEx-designated with low capitalisation */}
+        {(() => {
+          const byProject = projectGroups.map((pg) => {
+            const capexPct = pg.totalHours ? (pg.capexHours / pg.totalHours) * 100 : 0;
+            const anomaly = pg.capexHours > 0 && capexPct < 30;
+            return { ...pg, capexPct, anomaly };
+          }).sort((a, b) => b.totalHours - a.totalHours).slice(0, 10);
+          return (
+            <div className="insight-slice">
+              <h5>Project Capitalisation Rates</h5>
+              <p className="insight-sub">Projects with CapEx hours but &lt;30% capitalisation rate are flagged.</p>
+              <div className="insight-table">
+                {byProject.map((row) => {
+                  const opexPct = row.totalHours ? (row.opexHours / row.totalHours) * 100 : 0;
+                  const reviewPct = Math.max(0, 100 - row.capexPct - opexPct);
+                  return (
+                    <div className="insight-row" key={row.projectCode} style={{ cursor: "pointer" }} onClick={() => setInsightDrilldown({ label: `Project: ${row.projectCode} — ${row.projectName}`, records: reportingRecords.filter(r => r.project_code === row.projectCode) })}>
+                      <span className="insight-label"><strong>{row.projectCode}</strong> {row.projectName}</span>
+                      <div className="insight-bar-track">
+                        <span className="capex" style={{ width: `${row.capexPct}%` }} />
+                        <span className="opex" style={{ width: `${opexPct}%` }} />
+                        <span className="review" style={{ width: `${reviewPct}%` }} />
+                      </div>
+                      <span className="insight-pct">{Math.round(row.capexPct)}% CapEx</span>
+                      {row.anomaly && <span className="insight-flag review-flag">Low CapEx Rate</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Slice 4: Activity Type Distribution */}
+        {(() => {
+          // First pass: find employees whose ALL records are in exactly one activity type
+          const empAllActivities = new Map<string, Set<string>>();
+          reportingRecords.forEach((r) => {
+            const id = r.employee_id || "";
+            if (!id) return;
+            if (!empAllActivities.has(id)) empAllActivities.set(id, new Set());
+            if (r.activity_type) empAllActivities.get(id)!.add(r.activity_type);
+          });
+          const singleActivityEmpIds = new Set<string>();
+          empAllActivities.forEach((acts, id) => { if (acts.size === 1) singleActivityEmpIds.add(id); });
+
+          const byActivity = Array.from(
+            reportingRecords.reduce((map, r) => {
+              const act = r.activity_type || "Unknown";
+              const item = map.get(act) ?? { act, capex: 0, opex: 0, review: 0, total: 0, employees: new Set<string>() };
+              const h = Number(r.hours_allocated || 0);
+              const cls = effectiveClassification(r);
+              item.total += h;
+              if (r.employee_id) item.employees.add(r.employee_id);
+              if (cls === "CapEx") item.capex += h;
+              else if (cls === "OpEx") item.opex += h;
+              else item.review += h;
+              return map.set(act, item);
+            }, new Map<string, { act: string; capex: number; opex: number; review: number; total: number; employees: Set<string> }>())
+            .values()
+          ).sort((a, b) => b.total - a.total);
+          const maxActHours = Math.max(...byActivity.map(a => a.total), 1);
+          return (
+            <div className="insight-slice">
+              <h5>Activity Type Distribution</h5>
+              <p className="insight-sub">Bar shows volume relative to busiest activity type. Flagged when employees spending 100% of their time in a single activity category are found.</p>
+              <div className="insight-table">
+                {byActivity.map((row) => {
+                  // Count employees in this activity who are single-activity employees
+                  const singleCount = Array.from(row.employees).filter(id => singleActivityEmpIds.has(id)).length;
+                  return (
+                    <div className="insight-row" key={row.act} style={{ cursor: "pointer" }} onClick={() => setInsightDrilldown({ label: `Activity: ${row.act}`, records: reportingRecords.filter(r => (r.activity_type || "Unknown") === row.act) })}>
+                      <span className="insight-label">{row.act}</span>
+                      <div className="insight-bar-track">
+                        <span className="capex" style={{ width: `${(row.capex / maxActHours) * 100}%` }} />
+                        <span className="opex" style={{ width: `${(row.opex / maxActHours) * 100}%` }} />
+                        <span className="review" style={{ width: `${(row.review / maxActHours) * 100}%` }} />
+                      </div>
+                      <span className="insight-pct">{Math.round(row.total)}h</span>
+                      {singleCount > 0 && <span className="insight-flag review-flag">{singleCount} single-activity emp{singleCount > 1 ? "s" : ""}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Slice 5: Completion and Escalation Rate by Team */}
+        {(() => {
+          const byTeamConf = Array.from(
+            reportingRecords.reduce((map, r) => {
+              const team = r.team_name || r.org_unit || "Unassigned";
+              const item = map.get(team) ?? { team, approved: 0, escalated: 0, totalConf: 0, count: 0 };
+              const conf = Number(r._confidence || 0);
+              const cls = effectiveClassification(r);
+              item.count += 1;
+              item.totalConf += conf;
+              if (cls !== "Review" && conf >= 70) item.approved += 1;
+              else item.escalated += 1;
+              return map.set(team, item);
+            }, new Map<string, { team: string; approved: number; escalated: number; totalConf: number; count: number }>())
+            .values()
+          ).sort((a, b) => b.count - a.count);
+          return (
+            <div className="insight-slice">
+              <h5>Completion &amp; Escalation Rate by Team</h5>
+              <div className="insight-table">
+                {byTeamConf.map((row) => {
+                  const escRate = row.count ? (row.escalated / row.count) * 100 : 0;
+                  const avgConf = row.count ? Math.round(row.totalConf / row.count) : 0;
+                  const highEsc = escRate > 40;
+                  return (
+                    <div className="insight-row" key={row.team} style={{ cursor: "pointer" }} onClick={() => setInsightDrilldown({ label: `Escalation — Team: ${row.team}`, records: reportingRecords.filter(r => (r.team_name || r.org_unit || "Unassigned") === row.team && (effectiveClassification(r) === "Review" || Number(r._confidence || 0) < 70)) })}>
+                      <span className="insight-label">{row.team}</span>
+                      <div className="insight-bar-track">
+                        <span className="capex" style={{ width: `${100 - escRate}%` }} title="Completed" />
+                        <span className="review" style={{ width: `${escRate}%` }} title="Escalated" />
+                      </div>
+                      <span className="insight-pct">{Math.round(escRate)}% esc. · {avgConf} conf.</span>
+                      {highEsc && <span className="insight-flag review-flag">High Escalation</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* REQ-59: Automatic Anomaly Detection */}
+        {(() => {
+          const anomalies: Array<{ type: string; description: string; severity: "high" | "medium" }> = [];
+
+          // Anomaly 1: Large cross-team capitalisation spread — surface the extreme pair, not every team
+          const teamRates = Array.from(
+            reportingRecords.reduce((map, r) => {
+              const team = r.team_name || r.org_unit || "Unassigned";
+              const item = map.get(team) ?? { capex: 0, total: 0 };
+              const h = Number(r.hours_allocated || 0);
+              item.total += h;
+              if (effectiveClassification(r) === "CapEx") item.capex += h;
+              return map.set(team, item);
+            }, new Map<string, { capex: number; total: number }>())
+            .entries()
+          ).map(([team, d]) => ({ team, pct: d.total ? (d.capex / d.total) * 100 : 0 }));
+          if (teamRates.length >= 2) {
+            const sorted = [...teamRates].sort((a, b) => a.pct - b.pct);
+            const lowest = sorted[0];
+            const highest = sorted[sorted.length - 1];
+            const spread = highest.pct - lowest.pct;
+            if (spread > 50) {
+              anomalies.push({
+                type: "Large Cross-Team Capitalisation Spread",
+                description: `${Math.round(spread)}pt gap between ${highest.team} (${Math.round(highest.pct)}% CapEx) and ${lowest.team} (${Math.round(lowest.pct)}% CapEx). Review whether equivalent roles are being classified consistently across business units.`,
+                severity: "medium",
+              });
+            }
+          }
+
+          // Anomaly 2: Projects with CapEx hours but low capitalisation rates
+          projectGroups.forEach(pg => {
+            const capexPct = pg.totalHours ? (pg.capexHours / pg.totalHours) * 100 : 0;
+            if (pg.capexHours > 0 && capexPct < 25) {
+              anomalies.push({ type: "Low CapEx Project", description: `${pg.projectCode} (${pg.projectName}) has only ${Math.round(capexPct)}% capitalisation despite CapEx-classified hours.`, severity: "high" });
+            }
+          });
+
+          // Anomaly 3: Employees whose activity type distribution is inconsistent with job title
+          const empActivities = Array.from(
+            reportingRecords.reduce((map, r) => {
+              const id = r.employee_id || "Unknown";
+              const item = map.get(id) ?? { id, name: r.full_name || id, title: r.job_title || "", activities: new Set<string>(), total: 0 };
+              if (r.activity_type) item.activities.add(r.activity_type);
+              item.total += 1;
+              return map.set(id, item);
+            }, new Map<string, { id: string; name: string; title: string; activities: Set<string>; total: number }>())
+            .values()
+          );
+          empActivities.forEach(emp => {
+            if (emp.total >= 3 && emp.activities.size === 1) {
+              anomalies.push({ type: "Single-Activity Employee", description: `${emp.name} (${emp.title}) has 100% of records in one activity type — may indicate misclassification.`, severity: "medium" });
+            }
+          });
+
+          if (!anomalies.length) return null;
+          return (
+            <div className="insight-slice anomaly-slice">
+              <h5>Detected Anomalies</h5>
+              <p className="insight-sub">Automatically surfaced — review these before finalising the reconciliation report.</p>
+              <div className="anomaly-list">
+                {anomalies.map((a, i) => (
+                  <div className={`anomaly-item ${a.severity}`} key={i}>
+                    <strong>{a.type}</strong>
+                    <span>{a.description}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
       </section>
     </section>
   );
@@ -2953,6 +3450,302 @@ function LearningView({
             </section>
           )}
         </article>
+      </section>
+    </section>
+  );
+}
+
+function ReconciliationView({ report, records }: { report: ReconciliationReport; records: RecordItem[] }) {
+  const fmt = (v: number) => v.toLocaleString(undefined, { maximumFractionDigits: 1 });
+  const fmtPct = (v: number) => `${Math.round(v)}%`;
+  const fmtMoney = (h: number) => `$${Math.round(h * 125).toLocaleString()}`;
+
+  const [expandedCC, setExpandedCC] = useState<Set<string>>(new Set());
+  const [expandedJT, setExpandedJT] = useState<Set<string>>(new Set());
+  const [expandedEmp, setExpandedEmp] = useState<Set<string>>(new Set());
+
+  const toggle = <T,>(set: Set<T>, key: T): Set<T> => {
+    const next = new Set(set);
+    next.has(key) ? next.delete(key) : next.add(key);
+    return next;
+  };
+
+  // employee_id → project rows with completed / outstanding counts
+  const empProjectMap = useMemo(() => {
+    const map = new Map<string, { projectCode: string; projectName: string; totalHours: number; capexHours: number; opexHours: number; completed: number; outstanding: number }[]>();
+    records.forEach((r) => {
+      const id = r.employee_id || "";
+      if (!id) return;
+      const code = r.project_code || "No Project";
+      const name = r.project_name || code;
+      const h = Number(r.hours_allocated || 0);
+      const cls = effectiveClassification(r);
+      if (!map.has(id)) map.set(id, []);
+      const projs = map.get(id)!;
+      let p = projs.find((x) => x.projectCode === code);
+      if (!p) { p = { projectCode: code, projectName: name, totalHours: 0, capexHours: 0, opexHours: 0, completed: 0, outstanding: 0 }; projs.push(p); }
+      p.totalHours += h;
+      if (cls === "CapEx") { p.capexHours += h; p.completed += 1; }
+      else if (cls === "OpEx") { p.opexHours += h; p.completed += 1; }
+      else p.outstanding += 1;
+    });
+    return map;
+  }, [records]);
+
+  // employee_id → { completed, outstanding } record counts
+  const empStatusMap = useMemo(() => {
+    const map = new Map<string, { completed: number; outstanding: number }>();
+    records.forEach((r) => {
+      const id = r.employee_id || "";
+      if (!id) return;
+      if (!map.has(id)) map.set(id, { completed: 0, outstanding: 0 });
+      const s = map.get(id)!;
+      if (effectiveClassification(r) === "Review") s.outstanding += 1; else s.completed += 1;
+    });
+    return map;
+  }, [records]);
+
+  const groupByJobTitle = (employees: ReconciliationEmployee[]) => {
+    const map = new Map<string, { jobTitle: string; employees: ReconciliationEmployee[]; totalHours: number; capexHours: number; opexHours: number; deltaHours: number; flaggedCount: number }>();
+    employees.forEach((emp) => {
+      const jt = emp.job_title || "Unclassified";
+      if (!map.has(jt)) map.set(jt, { jobTitle: jt, employees: [], totalHours: 0, capexHours: 0, opexHours: 0, deltaHours: 0, flaggedCount: 0 });
+      const g = map.get(jt)!;
+      g.employees.push(emp);
+      g.totalHours += emp.total_hours;
+      g.capexHours += emp.capex_hours;
+      g.opexHours += emp.opex_hours;
+      g.deltaHours += emp.delta_hours;
+      if (emp.flagged) g.flaggedCount += 1;
+    });
+    return Array.from(map.values()).sort((a, b) => b.totalHours - a.totalHours);
+  };
+
+  const CapexBar = ({ pct }: { pct: number }) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <div style={{ flex: 1, height: 6, background: "var(--border)", borderRadius: 3, overflow: "hidden", minWidth: 60 }}>
+        <div style={{ width: `${Math.min(pct, 100)}%`, height: "100%", background: "var(--capex)", borderRadius: 3 }} />
+      </div>
+      <span>{fmtPct(pct)}</span>
+    </div>
+  );
+
+  return (
+    <section className="page-stack">
+      <div className="page-header">
+        <div>
+          <h2>Reconciliation &amp; Reporting</h2>
+          <p>4-level roll-up: Cost Centre → Job Title → Employee → Project. Click any row to expand.</p>
+        </div>
+        <div className="source-header-icon"><Layers3 size={22} /></div>
+      </div>
+
+      <div className="metric-grid">
+        <Metric label="Employees processed" value={fmt(report.total_employees_processed)} icon={ClipboardCheck} />
+        <Metric label="Cost centres" value={fmt(report.total_cost_centers)} icon={Database} />
+        <Metric label="Total hours" value={fmt(report.total_hours)} icon={BarChart3} />
+        <Metric label="CapEx hours" value={fmt(report.total_capex_hours)} icon={CheckCircle2} tone="capex" />
+        <Metric label="Capitalisation rate" value={fmtPct(report.total_capex_pct)} icon={TrendingUp} tone="capex" />
+        <Metric label="Recovery estimate" value={fmtMoney(report.total_capex_hours)} icon={Database} tone="capex" />
+      </div>
+
+      <section className="panel">
+        <div className="section-title">
+          <h4>Cost Centre Reconciliation — Hierarchical Roll-Up</h4>
+          <span>Cost Centre → Job Title → Employee → Project · baseline assumes 100% OpEx</span>
+        </div>
+        {report.cost_centers.length === 0 ? (
+          <section className="approval-empty compact-empty">
+            <Layers3 size={22} />
+            <strong>No data yet</strong>
+            <p>Upload and classify records to generate the reconciliation report.</p>
+          </section>
+        ) : (
+          <div className="table-wrap">
+            <table className="hier-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Count</th>
+                  <th>Completed</th>
+                  <th>Outstanding</th>
+                  <th>Total Hours</th>
+                  <th>CapEx Hours</th>
+                  <th>OpEx Hours</th>
+                  <th>Capitalisation</th>
+                  <th>Delta vs Baseline</th>
+                  <th>Flagged</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.cost_centers.map((cc) => {
+                  const ccExpanded = expandedCC.has(cc.cost_center);
+                  const jtGroups = groupByJobTitle(cc.employees);
+                  return (
+                    <Fragment key={cc.cost_center}>
+                      {/* ── L1: Cost Centre ── */}
+                      <tr className="hier-row-l1" onClick={() => setExpandedCC(toggle(expandedCC, cc.cost_center))}>
+                        <td className="hier-name-cell" style={{ paddingLeft: 10 }}>
+                          <span className="hier-toggle">{ccExpanded ? "▼" : "▶"}</span>
+                          <strong>{cc.cost_center}</strong>
+                        </td>
+                        <td>{cc.employee_count}</td>
+                        <td><span className="badge capex">{cc.completed_records}</span></td>
+                        <td><span className={`badge ${cc.outstanding_records > 0 ? "review" : "opex"}`}>{cc.outstanding_records}</span></td>
+                        <td>{fmt(cc.total_hours)}h</td>
+                        <td className="capex-text">{fmt(cc.capex_hours)}h</td>
+                        <td>{fmt(cc.opex_hours)}h</td>
+                        <td><CapexBar pct={cc.capitalisation_pct} /></td>
+                        <td className="capex-text">+{fmt(cc.capitalisation_delta_hours)}h</td>
+                        <td>{cc.flagged_employee_count > 0 ? <span className="badge review">{cc.flagged_employee_count} flagged</span> : <span className="badge opex">None</span>}</td>
+                      </tr>
+
+                      {ccExpanded && jtGroups.map((jtg) => {
+                        const jtKey = `${cc.cost_center}::${jtg.jobTitle}`;
+                        const jtExpanded = expandedJT.has(jtKey);
+                        const jtCapexPct = jtg.totalHours ? (jtg.capexHours / jtg.totalHours) * 100 : 0;
+                        const jtCompleted = jtg.employees.reduce((s, e) => s + (empStatusMap.get(e.employee_id)?.completed ?? 0), 0);
+                        const jtOutstanding = jtg.employees.reduce((s, e) => s + (empStatusMap.get(e.employee_id)?.outstanding ?? 0), 0);
+                        return (
+                          <Fragment key={jtKey}>
+                            {/* ── L2: Job Title ── */}
+                            <tr className="hier-row-l2" onClick={() => setExpandedJT(toggle(expandedJT, jtKey))}>
+                              <td className="hier-name-cell" style={{ paddingLeft: 30 }}>
+                                <span className="hier-toggle">{jtExpanded ? "▼" : "▶"}</span>
+                                {jtg.jobTitle}
+                              </td>
+                              <td>{jtg.employees.length}</td>
+                              <td><span className="badge capex">{jtCompleted}</span></td>
+                              <td><span className={`badge ${jtOutstanding > 0 ? "review" : "opex"}`}>{jtOutstanding}</span></td>
+                              <td>{fmt(jtg.totalHours)}h</td>
+                              <td className="capex-text">{fmt(jtg.capexHours)}h</td>
+                              <td>{fmt(jtg.opexHours)}h</td>
+                              <td><CapexBar pct={jtCapexPct} /></td>
+                              <td className="capex-text">+{fmt(jtg.deltaHours)}h</td>
+                              <td>{jtg.flaggedCount > 0 ? <span className="badge review">{jtg.flaggedCount} flagged</span> : <span className="badge opex">None</span>}</td>
+                            </tr>
+
+                            {jtExpanded && jtg.employees.map((emp) => {
+                              const empExpanded = expandedEmp.has(emp.employee_id);
+                              const projects = (empProjectMap.get(emp.employee_id) || []).sort((a, b) => b.totalHours - a.totalHours);
+                              const empStatus = empStatusMap.get(emp.employee_id) ?? { completed: 0, outstanding: 0 };
+                              return (
+                                <Fragment key={emp.employee_id}>
+                                  {/* ── L3: Employee ── */}
+                                  <tr
+                                    className="hier-row-l3"
+                                    style={{ cursor: projects.length > 0 ? "pointer" : "default" }}
+                                    onClick={() => projects.length > 0 && setExpandedEmp(toggle(expandedEmp, emp.employee_id))}
+                                  >
+                                    <td className="hier-name-cell" style={{ paddingLeft: 52 }}>
+                                      <span className="hier-toggle">{projects.length > 0 ? (empExpanded ? "▼" : "▶") : "·"}</span>
+                                      <span>
+                                        <strong>{emp.full_name}</strong>
+                                        <span className="hier-muted"> {emp.employee_id}</span>
+                                      </span>
+                                    </td>
+                                    <td>{emp.record_count}</td>
+                                    <td><span className="badge capex">{empStatus.completed}</span></td>
+                                    <td><span className={`badge ${empStatus.outstanding > 0 ? "review" : "opex"}`}>{empStatus.outstanding}</span></td>
+                                    <td>{fmt(emp.total_hours)}h</td>
+                                    <td className="capex-text">{fmt(emp.capex_hours)}h</td>
+                                    <td>{fmt(emp.opex_hours)}h</td>
+                                    <td><CapexBar pct={emp.capex_pct} /></td>
+                                    <td className="capex-text">+{fmt(emp.delta_hours)}h</td>
+                                    <td>{emp.flagged ? <span className="badge review">Flagged</span> : <span className="badge opex">None</span>}</td>
+                                  </tr>
+
+                                  {empExpanded && projects.map((proj) => {
+                                    const projCapexPct = proj.totalHours ? (proj.capexHours / proj.totalHours) * 100 : 0;
+                                    return (
+                                      /* ── L4: Project ── */
+                                      <tr key={proj.projectCode} className="hier-row-l4">
+                                        <td className="hier-name-cell" style={{ paddingLeft: 74 }}>
+                                          <span className="hier-toggle">·</span>
+                                          <span>
+                                            <strong>{proj.projectCode}</strong>
+                                            {proj.projectName !== proj.projectCode && <span className="hier-muted"> {proj.projectName}</span>}
+                                          </span>
+                                        </td>
+                                        <td>{proj.completed + proj.outstanding}</td>
+                                        <td><span className="badge capex">{proj.completed}</span></td>
+                                        <td><span className={`badge ${proj.outstanding > 0 ? "review" : "opex"}`}>{proj.outstanding}</span></td>
+                                        <td>{fmt(proj.totalHours)}h</td>
+                                        <td className="capex-text">{fmt(proj.capexHours)}h</td>
+                                        <td>{fmt(proj.opexHours)}h</td>
+                                        <td><CapexBar pct={projCapexPct} /></td>
+                                        <td style={{ color: "var(--text-muted)" }}>—</td>
+                                        <td style={{ color: "var(--text-muted)" }}>—</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </Fragment>
+                              );
+                            })}
+                          </Fragment>
+                        );
+                      })}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="panel">
+        <div className="section-title">
+          <h4>Data Schema &amp; Production Integration Note</h4>
+          <span>REQ-55 · REQ-56 · stubbed data documentation</span>
+        </div>
+        <div style={{ fontSize: 13, lineHeight: 1.6, color: "var(--text-muted)" }}>
+          <p><strong style={{ color: "var(--text)" }}>POC data source:</strong> SQLite classified record store. Production target: enterprise data warehouse (Snowflake / BigQuery / Azure Synapse). Cost centre keys are derived from <code>org_unit</code> or <code>team_name</code> fields on each classified record — in production these join to the HRIS cost centre master table via a shared <code>cost_center_id</code> foreign key.</p>
+
+          <p style={{ marginTop: 12 }}><strong style={{ color: "var(--text)" }}>Report output schema (REQ-55):</strong></p>
+          <table style={{ width: "100%", marginTop: 6, borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr style={{ background: "var(--bg-subtle)" }}>
+                {["Field", "Type", "Description"].map(h => <th key={h} style={{ textAlign: "left", padding: "4px 8px", borderBottom: "1px solid var(--border)" }}>{h}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ["total_employees_processed", "integer", "Distinct employee IDs across all records in the batch window"],
+                ["total_cost_centers", "integer", "Distinct cost centre keys in the batch"],
+                ["total_hours", "float", "Sum of hours_allocated across all records"],
+                ["total_capex_hours", "float", "Hours classified as CapEx — the capitalisation recovery total"],
+                ["total_capex_pct", "float (0–100)", "total_capex_hours / total_hours × 100"],
+                ["total_baseline_delta_hours", "float", "Equals total_capex_hours — delta vs 100% OpEx baseline"],
+                ["cost_centers[].completed_records", "integer", "Records routed to approved queue per cost centre (REQ-55b)"],
+                ["cost_centers[].outstanding_records", "integer", "Records still in escalation / review queue (REQ-55b)"],
+                ["cost_centers[].capex_hours", "float", "CapEx hours per cost centre (REQ-55c)"],
+                ["cost_centers[].opex_hours", "float", "OpEx hours per cost centre (REQ-55c)"],
+                ["cost_centers[].review_hours", "float", "Hours in records still under review (not yet finalised)"],
+                ["cost_centers[].capitalisation_delta_hours", "float", "CapEx hours recovered vs 100% OpEx baseline (REQ-55d)"],
+                ["cost_centers[].flagged_employee_count", "integer", "Employees flagged for large delta or low confidence (REQ-55e)"],
+                ["cost_centers[].employees[].review_hours", "float", "Review-state hours per employee — total − capex − opex"],
+              ].map(([field, type, desc]) => (
+                <tr key={field} style={{ borderBottom: "1px solid var(--border)" }}>
+                  <td style={{ padding: "4px 8px", fontFamily: "monospace", whiteSpace: "nowrap" }}>{field}</td>
+                  <td style={{ padding: "4px 8px", whiteSpace: "nowrap" }}>{type}</td>
+                  <td style={{ padding: "4px 8px" }}>{desc}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <p style={{ marginTop: 12 }}><strong style={{ color: "var(--text)" }}>Hierarchy levels (REQ-56):</strong> Cost Centre → Job Title → Employee → Project. All tiers expose identical columns: Count, Completed, Outstanding, Total Hours, CapEx Hours, OpEx Hours, Capitalisation %, Delta vs Baseline, Flagged.</p>
+
+          <p style={{ marginTop: 12 }}><strong style={{ color: "var(--text)" }}>Production integration paths:</strong></p>
+          <ul style={{ marginTop: 4, paddingLeft: 18 }}>
+            <li><strong>SAP S/4HANA / SAP CO-PA:</strong> Export cost-centre roll-up as an IDoc or RFC call to CO-PA. Map <code>cost_center</code> → SAP Cost Centre master, <code>capitalisation_delta_hours × rate</code> → CO-PA value field for CapEx recovery posting.</li>
+            <li style={{ marginTop: 4 }}><strong>Internal BI tools (Power BI / Tableau / Looker):</strong> Expose <code>/api/reconciliation</code> as a REST connector or write cost-centre rows to a reporting schema in the data warehouse. The hierarchical keys (cost_center, job_title, employee_id, project_code) form natural dimension columns for a star schema.</li>
+            <li style={{ marginTop: 4 }}><strong>Tax &amp; accounting (Excel / CSV export):</strong> Cost-centre rows map directly to a pivot-ready flat table. The stub UI can be extended with a CSV download button using the same API payload.</li>
+          </ul>
+
+          <p style={{ marginTop: 12 }}><strong style={{ color: "var(--text)" }}>Delta calculation:</strong> Baseline assumes 100% OpEx. Any classified CapEx hour represents a capitalisation recovery. <code>capitalisation_delta_hours × $125/hr</code> (standard cost rate) gives the estimated USD recovery shown in the header metrics. In production, the rate would be sourced from the HRIS cost rate table per employee grade.</p>
+        </div>
       </section>
     </section>
   );

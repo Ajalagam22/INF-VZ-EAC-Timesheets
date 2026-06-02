@@ -70,3 +70,7 @@ def update_record(record_uid: str, request: RecordUpdateRequest, db: Session = D
 @router.post("/drafts/submit")
 def submit_draft(request: DraftSubmitRequest, db: Session = Depends(get_db)) -> Dict[str, Any]:
     return service.submit_draft(db, request)
+
+@router.get("/reconciliation")
+def reconciliation_report(db: Session = Depends(get_db)) -> Dict[str, Any]:
+    return service.reconciliation_report(db)

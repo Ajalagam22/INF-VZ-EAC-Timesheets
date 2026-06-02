@@ -11,6 +11,7 @@ class EACAgentState(TypedDict):
     policy_result: Dict[str, Any]
     classified_record: Dict[str, Any]
     routing_decision: str
+    reconciliation_result: Dict[str, Any]
     steps: List[Dict[str, Any]]
     errors: List[str]
     precomputed_llm: Dict[str, Any]  # pre-fetched async; empty dict = call LLM normally

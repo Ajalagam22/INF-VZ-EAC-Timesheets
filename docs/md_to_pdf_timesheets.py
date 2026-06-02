@@ -34,6 +34,7 @@ from reportlab.platypus import (
 DIR = Path(__file__).parent
 INPUT = DIR / "architecture_document.md"
 DIAG = DIR / "EAC_Timesheets_Azure_Architecture.png"
+WORKFLOW_DIAG = DIR / "EAC_Agentic_Workflow_Diagram.png"
 OUTPUT = DIR / "EAC_Timesheets_Architecture_Document.pdf"
 
 PORT = LETTER
@@ -191,7 +192,7 @@ def _cover_story(styles):
 def _diag_story(styles):
     s = []
     if not DIAG.exists():
-        s.append(Paragraph("[Diagram not found]", styles["DocBody"]))
+        s.append(Paragraph("[Azure diagram not found]", styles["DocBody"]))
         return s
     dw = 10.0 * inch
     dh = dw * (18 / 28)
@@ -199,6 +200,22 @@ def _diag_story(styles):
     s.append(Spacer(1, 0.08 * inch))
     s.append(Paragraph(
         "Figure 1 — EAC Labor Timesheets Azure architecture: Azure Front Door, Azure Container Apps, LangGraph pipeline, Azure OpenAI, PostgreSQL, Blob Storage, Service Bus, Key Vault, Entra ID, and monitoring services.",
+        styles["FigCaption"],
+    ))
+    return s
+
+
+def _workflow_diag_story(styles):
+    s = []
+    if not WORKFLOW_DIAG.exists():
+        s.append(Paragraph("[Agentic workflow diagram not found — run generate_agentic_workflow_diagram.py]", styles["DocBody"]))
+        return s
+    dw = LAND[0] - 0.8 * inch
+    dh = dw * (13 / 24)
+    s.append(Image(str(WORKFLOW_DIAG), width=dw, height=dh))
+    s.append(Spacer(1, 0.08 * inch))
+    s.append(Paragraph(
+        "Figure 2 — EAC Agentic Workflow Diagram (REQ-53): 7 pipeline stages from Data Sources through Reconciliation & Reporting Agent, with 3 output channels. Self-explanatory standalone deliverable.",
         styles["FigCaption"],
     ))
     return s
@@ -361,6 +378,9 @@ def main():
     story.append(NextPageTemplate("Diagram"))
     story.append(PageBreak())
     story += _diag_story(styles)
+    story.append(NextPageTemplate("Diagram"))
+    story.append(PageBreak())
+    story += _workflow_diag_story(styles)
     story.append(NextPageTemplate("Text"))
     story.append(PageBreak())
     md = INPUT.read_text(encoding="utf-8")

@@ -413,6 +413,145 @@ class ClassificationService:
             ]
         }
 
+
+    def reconciliation_report(self, db: Session) -> Dict[str, Any]:
+        rows = self._reporting_rows(self._latest_rows(db))
+
+        cost_centers: Dict[str, Dict[str, Any]] = {}
+        all_employees: set = set()
+
+        for row in rows:
+            payload = dict(row.payload_json or {})
+            cost_center = payload.get("org_unit") or payload.get("team_name") or "Unassigned"
+            employee_id = str(payload.get("employee_id") or "Unknown")
+            classification = self._effective_classification(row)
+            hours = self._hours(row)
+            confidence = int(row.confidence or 0)
+            routing = payload.get("_routingState") or (
+                "approved" if classification != "Review" and confidence >= 70 else "review"
+            )
+
+            all_employees.add(employee_id)
+
+            cc = cost_centers.setdefault(
+                cost_center,
+                {
+                    "cost_center": cost_center,
+                    "employee_ids": set(),
+                    "total_hours": 0.0,
+                    "capex_hours": 0.0,
+                    "opex_hours": 0.0,
+                    "review_hours": 0.0,
+                    "completed_records": 0,
+                    "outstanding_records": 0,
+                    "flagged_employees": set(),
+                    "employees": {},
+                },
+            )
+
+            cc["employee_ids"].add(employee_id)
+            cc["total_hours"] += hours
+            if classification == "CapEx":
+                cc["capex_hours"] += hours
+            elif classification == "OpEx":
+                cc["opex_hours"] += hours
+            else:
+                cc["review_hours"] += hours
+
+            if routing == "approved":
+                cc["completed_records"] += 1
+            else:
+                cc["outstanding_records"] += 1
+                cc["flagged_employees"].add(employee_id)
+
+            emp = cc["employees"].setdefault(
+                employee_id,
+                {
+                    "employee_id": employee_id,
+                    "full_name": payload.get("full_name") or employee_id,
+                    "job_title": payload.get("job_title") or "",
+                    "total_hours": 0.0,
+                    "capex_hours": 0.0,
+                    "opex_hours": 0.0,
+                    "review_hours": 0.0,
+                    "record_count": 0,
+                    "flagged": False,
+                },
+            )
+            emp["total_hours"] += hours
+            if classification == "CapEx":
+                emp["capex_hours"] += hours
+            elif classification == "OpEx":
+                emp["opex_hours"] += hours
+            else:
+                emp["review_hours"] += hours
+            emp["record_count"] += 1
+            if routing != "approved":
+                emp["flagged"] = True
+
+        result_cost_centers = []
+        total_capex_hours = 0.0
+        total_hours_all = 0.0
+
+        for cc in cost_centers.values():
+            total_hours = cc["total_hours"]
+            capex_hours = round(cc["capex_hours"], 2)
+            opex_hours = round(cc["opex_hours"], 2)
+            capex_pct = round((capex_hours / total_hours) * 100, 1) if total_hours else 0.0
+            total_capex_hours += capex_hours
+            total_hours_all += total_hours
+
+            employees_serialized = sorted(
+                [
+                    {
+                        "employee_id": emp["employee_id"],
+                        "full_name": emp["full_name"],
+                        "job_title": emp["job_title"],
+                        "total_hours": round(emp["total_hours"], 2),
+                        "capex_hours": round(emp["capex_hours"], 2),
+                        "opex_hours": round(emp["opex_hours"], 2),
+                        "capex_pct": round((emp["capex_hours"] / emp["total_hours"]) * 100, 1) if emp["total_hours"] else 0.0,
+                        "delta_hours": round(emp["capex_hours"], 2),
+                        "review_hours": round(emp["review_hours"], 2),
+                        "record_count": emp["record_count"],
+                        "flagged": emp["flagged"],
+                    }
+                    for emp in cc["employees"].values()
+                ],
+                key=lambda e: e["total_hours"],
+                reverse=True,
+            )
+
+            result_cost_centers.append(
+                {
+                    "cost_center": cc["cost_center"],
+                    "employee_count": len(cc["employee_ids"]),
+                    "completed_records": cc["completed_records"],
+                    "outstanding_records": cc["outstanding_records"],
+                    "total_hours": round(total_hours, 2),
+                    "capex_hours": capex_hours,
+                    "opex_hours": opex_hours,
+                    "review_hours": round(cc["review_hours"], 2),
+                    "baseline_opex_hours": round(total_hours, 2),
+                    "capitalisation_delta_hours": round(capex_hours, 2),
+                    "capitalisation_pct": capex_pct,
+                    "flagged_employee_count": len(cc["flagged_employees"]),
+                    "employees": employees_serialized,
+                }
+            )
+
+        result_cost_centers.sort(key=lambda c: c["total_hours"], reverse=True)
+
+        return {
+            "total_employees_processed": len(all_employees),
+            "total_cost_centers": len(result_cost_centers),
+            "total_hours": round(total_hours_all, 2),
+            "total_capex_hours": round(total_capex_hours, 2),
+            "total_capex_pct": round((total_capex_hours / total_hours_all) * 100, 1) if total_hours_all else 0.0,
+            "total_baseline_delta_hours": round(total_capex_hours, 2),
+            "cost_centers": result_cost_centers,
+        }
+
     def _latest_rows(self, db: Session) -> List[ActivityRecord]:
         latest_runs: Dict[str, str] = {}
         for batch in db.query(BatchRun).order_by(BatchRun.created_at.desc()).all():
